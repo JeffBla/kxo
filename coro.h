@@ -31,7 +31,7 @@ void schedule(void);
 
 void task_register(void (*func)(void));
 
-void task_degister(const void (*const func)(void));
+void task_degister(void (*const func)(void));
 
 void task_add(struct task *task);
 

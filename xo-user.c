@@ -105,14 +105,38 @@ static void listen_keyboard_handler(void)
 
 static int device_fd;
 static char display_buf[DRAWBUFFER_SIZE];
+static char table[N_GRIDS];
 
+/* Draw the board into display_buf */
+static int drawing(char *table)
+{
+    int i = 0, k = 0;
+    display_buf[i++] = '\n';
+    display_buf[i++] = '\n';
+
+    while (i < DRAWBUFFER_SIZE) {
+        for (int j = 0; j < (BOARD_SIZE << 1) - 1 && k < N_GRIDS; j++) {
+            display_buf[i++] = j & 1 ? '|' : table[k++];
+        }
+        display_buf[i++] = '\n';
+        for (int j = 0; j < (BOARD_SIZE << 1) - 1; j++) {
+            display_buf[i++] = '-';
+        }
+        display_buf[i++] = '\n';
+    }
+
+    return 0;
+}
 static void draw_board(void)
 {
     TASK_SCHEDULE();
     while (!end_attr) {
         if (read_attr) {
             printf("\033[H\033[J"); /* ASCII escape code to clear the screen */
-            read(device_fd, display_buf, DRAWBUFFER_SIZE);
+            read(device_fd, table, N_GRIDS);
+            drawing(table);
+            // avoid flickering
+            usleep(100);
             printf("%s", display_buf);
         }
         TASK_YIELD();
