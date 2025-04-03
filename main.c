@@ -93,12 +93,17 @@ static DEFINE_MUTEX(read_lock);
 /* Wait queue to implement blocking I/O from userspace */
 static DECLARE_WAIT_QUEUE_HEAD(rx_wait);
 
-static char table[N_GRIDS];
+// Each 2 bits of the table represent a grid
+// 0: empty
+// 1: player 1
+// 2: player 2
+static uint32_t table;
 
 /* Insert the whole chess board into the kfifo buffer */
 static void produce_board(void)
 {
-    unsigned int len = kfifo_in(&rx_fifo, table, sizeof(table));
+    unsigned int len =
+        kfifo_in(&rx_fifo, (const unsigned char *) &table, sizeof(table));
     if (unlikely(len < sizeof(table)) && printk_ratelimit())
         pr_warn("%s: %zu bytes dropped\n", __func__, sizeof(table) - len);
 
@@ -175,14 +180,14 @@ static void ai_one_work_func(struct work_struct *w)
     tv_start = ktime_get();
     mutex_lock(&producer_lock);
     int move;
-    WRITE_ONCE(move, mcts(table, 'O'));
+    WRITE_ONCE(move, mcts(table, PLAYER1));
 
     smp_mb();
 
     if (move != -1)
-        WRITE_ONCE(table[move], 'O');
+        WRITE_ONCE(table, SET_VAL_INDEX(table, move, PLAYER1));
 
-    WRITE_ONCE(turn, 'X');
+    WRITE_ONCE(turn, PLAYER2);
     WRITE_ONCE(finish, 1);
     smp_wmb();
     mutex_unlock(&producer_lock);
@@ -209,14 +214,14 @@ static void ai_two_work_func(struct work_struct *w)
     tv_start = ktime_get();
     mutex_lock(&producer_lock);
     int move;
-    WRITE_ONCE(move, negamax_predict(table, 'X').move);
+    WRITE_ONCE(move, negamax_predict(table, PLAYER2).move);
 
     smp_mb();
 
     if (move != -1)
-        WRITE_ONCE(table[move], 'X');
+        WRITE_ONCE(table, SET_VAL_INDEX(table, move, PLAYER2));
 
-    WRITE_ONCE(turn, 'O');
+    WRITE_ONCE(turn, PLAYER1);
     WRITE_ONCE(finish, 1);
     smp_wmb();
     mutex_unlock(&producer_lock);
@@ -258,11 +263,11 @@ static void game_tasklet_func(unsigned long __data)
     READ_ONCE(turn);
     smp_rmb();
 
-    if (finish && turn == 'O') {
+    if (finish && turn == PLAYER1) {
         WRITE_ONCE(finish, 0);
         smp_wmb();
         queue_work(kxo_workqueue, &ai_one_work);
-    } else if (finish && turn == 'X') {
+    } else if (finish && turn == PLAYER2) {
         WRITE_ONCE(finish, 0);
         smp_wmb();
         queue_work(kxo_workqueue, &ai_two_work);
@@ -306,7 +311,7 @@ static void timer_handler(struct timer_list *__timer)
 
     char win = check_win(table);
 
-    if (win == ' ') {
+    if (win == 0) {
         ai_game();
         mod_timer(&timer, jiffies + msecs_to_jiffies(delay));
     } else {
@@ -325,8 +330,8 @@ static void timer_handler(struct timer_list *__timer)
         }
 
         if (attr_obj.end == '0') {
-            memset(table, ' ',
-                   N_GRIDS); /* Reset the table so the game restart */
+            memset(&table, 0,
+                   sizeof(table)); /* Reset the table so the game restart */
             mod_timer(&timer, jiffies + msecs_to_jiffies(delay));
         }
 
@@ -477,8 +482,8 @@ static int __init kxo_init(void)
 
     negamax_init();
     mcts_init();
-    memset(table, ' ', N_GRIDS);
-    turn = 'O';
+    memset(&table, 0, sizeof(table));
+    turn = PLAYER1;
     finish = 1;
 
     attr_obj.display = '1';

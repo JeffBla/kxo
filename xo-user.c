@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,10 +106,10 @@ static void listen_keyboard_handler(void)
 
 static int device_fd;
 static char display_buf[DRAWBUFFER_SIZE];
-static char table[N_GRIDS];
+static uint32_t table;
 
 /* Draw the board into display_buf */
-static int drawing(char *table)
+static int drawing(const uint32_t table)
 {
     int i = 0, k = 0;
     display_buf[i++] = '\n';
@@ -116,7 +117,19 @@ static int drawing(char *table)
 
     while (i < DRAWBUFFER_SIZE) {
         for (int j = 0; j < (BOARD_SIZE << 1) - 1 && k < N_GRIDS; j++) {
-            display_buf[i++] = j & 1 ? '|' : table[k++];
+            if (j & 1) {
+                display_buf[i++] = '|';
+            } else {
+                char player = GET_VAL(table, k);
+                k++;
+                if (player == BLANK) {
+                    display_buf[i++] = ' ';
+                } else if (player == PLAYER1) {
+                    display_buf[i++] = 'O';
+                } else if (player == PLAYER2) {
+                    display_buf[i++] = 'X';
+                }
+            }
         }
         display_buf[i++] = '\n';
         for (int j = 0; j < (BOARD_SIZE << 1) - 1; j++) {
@@ -133,7 +146,7 @@ static void draw_board(void)
     while (!end_attr) {
         if (read_attr) {
             printf("\033[H\033[J"); /* ASCII escape code to clear the screen */
-            read(device_fd, table, N_GRIDS);
+            read(device_fd, &table, sizeof(table));
             drawing(table);
             // avoid flickering
             usleep(100);

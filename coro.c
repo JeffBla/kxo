@@ -25,7 +25,7 @@ void task_register(void (*func)(void))
     task_add(task);
 }
 
-void task_degister(void (*const func)(void))
+void task_degister(const void (*const func)(void))
 {
     struct task *task = NULL;
     if (list_empty)

@@ -2,11 +2,29 @@
 
 #define BOARD_SIZE 4
 #define GOAL 3
-#define ALLOW_EXCEED 1
 #define N_GRIDS (BOARD_SIZE * BOARD_SIZE)
+
 #define GET_INDEX(i, j) ((i) * (BOARD_SIZE) + (j))
+
+#define GET_VAL_INDEX(t, i) (((t) & (3 << (i) * 2)) >> (i) * 2)
+#define GET_VAL_ROW_COL(t, i, j) \
+    ((((t) & ((3 << (GET_INDEX(i, j)) * 2))) >> (GET_INDEX(i, j)) * 2))
+
+#define GET_MACRO_VAL(_1, _2, _3, NAME, ...) NAME
+#define GET_VAL(...) \
+    GET_MACRO_VAL(__VA_ARGS__, GET_VAL_ROW_COL, GET_VAL_INDEX)(__VA_ARGS__)
+
 #define GET_COL(x) ((x) % BOARD_SIZE)
 #define GET_ROW(x) ((x) / BOARD_SIZE)
+
+// Table need to clear first then set bits
+#define SET_VAL_INDEX(t, i, v) (((t) & ~(3 << ((i) * 2))) | ((v) << (i) * 2))
+
+#define LOSE 0
+#define WIN 1
+#define BLANK 0
+#define PLAYER1 1
+#define PLAYER2 2
 
 #define for_each_empty_grid(i, table) \
     for (int i = 0; i < N_GRIDS; i++) \
@@ -34,6 +52,6 @@ typedef unsigned fixed_point_t;
 
 extern const line_t lines[4];
 
-int *available_moves(const char *table);
-char check_win(const char *t);
+int *available_moves(const uint32_t table);
+char check_win(const uint32_t t);
 fixed_point_t calculate_win_value(char win, char player);
